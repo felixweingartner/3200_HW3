@@ -1,0 +1,258 @@
+% Solving ill-conditioned matrix problem using iterative refinement
+% Written by Felix Weingartner for 3200 Hw3
+
+NValues = [ 21, 41, 81, 161 ];
+aValues = [ 1.0, 1.0e-1, 1.0e-3, 1.0e-5, 1.0e-7, 1.0e-9, 1.0e-11, 1.0e-13, 1.0e-15 ];
+dx = 1;
+H1 = 8;
+Hr = 4;
+
+file1 = fopen('Outputs/Inst4.txt', 'wt');
+format = "N:%d\ta:%d\tCond:%0.5f\tSol:%s\n";
+
+
+for n = NValues
+   for a = aValues
+       
+      % Generate matrix G
+      
+      c = 1/dx^2;
+      G = zeros(n, n);
+      % glob vars
+      i = 0;
+      value = 0;
+      
+      % Top rows
+      
+      for i = 1:n/2
+          
+          % Column
+          
+          for j = 1:n
+              
+              % -2 and 1
+              
+              if (mod(i, 2) == 1)
+                  
+                % Odd columns are -2 and even columns are 1
+                
+                if (mod(j, 2) == 1)
+                    value = -2;
+                else
+                    value = 1;
+                end
+              else
+                  
+                % Odd columns are 1 and even columns are -2
+                
+                if (mod(j, 2) == 1)
+                    value = 1;
+                else
+                    value = -2;
+                end
+              end
+              
+              G(i, j) = value;
+              
+          end
+      end
+      
+      % Middle row
+      if (mod(n/2, 2) == 1)
+          
+          i = i + 1;
+          
+          for j = 1:n  
+            % 3-1 columns are 1, 3-2 columns are -(1+a), and 3-3
+            % columns are a
+
+            if (mod(j, 3) == 1)
+                value = 1;
+            elseif (mod(j, 3) == 2)
+                value = (-1)*(1+a);
+            else
+                value = a;
+            end
+            
+            G(i, j) = value;
+          end
+      end
+      
+      % Bottom rows
+      for i = i+1 : n
+          
+        % Column
+          
+          for j = 1:n
+              
+              % a, -2a
+              
+              if (mod(i, 2) == 1)
+                  
+                % Odd columns are a and even columns are -2a
+                
+                if (mod(j, 2) == 1)
+                    value = a;
+                else
+                    value = -2*a;
+                end
+              else
+                  
+                % Odd columns are -2a and even columns are a
+                
+                if (mod(j, 2) == 1)
+                    value = -2*a;
+                else
+                    value = a;
+                end
+              end
+              
+              G(i, j) = value;
+              
+          end
+      end
+      
+      % Generate result matrix Gh with dimensions nx1
+      Gh = zeros(n,1);
+      Gh(1,1) = -H1;
+      Gh(n,1) = -a*Hr;
+      
+      % We have cG(h) = Gh with h solutions unknown
+      G = c.*G;
+      % Generate h
+      H = linsolve(G, Gh);
+      % Generate h as a string
+      hStr = mat2str(H);
+      % Generage Condition number
+      mCond = cond(G);
+      
+      % Print values
+      fprintf(file1, format, [n, a, mCond]);
+      
+
+   end
+end
+
+
+
+function inst_3(f, NValues)
+    integ = integral(f, -1, 1);
+    syms x;
+    f_2(x) = diff(diff(f(x), x), x);
+    f_4(x) = diff(diff(f_2(x), x), x);
+    addpath('Outputs');
+    file1 = fopen('Outputs/Inst3.txt', 'wt');
+    format = "Actual:%0.5f\tN:%d\tMid:%0.5f\tTrap:%0.5f\tSimp:%0.5f\n";
+    
+for NLim = NValues
+    a = -1;
+    b = 1;
+    
+    Int_mdp = zeros(1,NLim);
+    
+    Int_trpz = zeros(1,NLim);
+    Err_trpz = zeros(1,NLim);
+    EstErr_trpz = zeros(1,NLim);
+    RichErr_trpz = zeros(1,NLim);
+    
+    Int_simp = zeros(1,NLim);
+    Err_simp = zeros(1,NLim);
+    EstErr_simp = zeros(1,NLim);
+    RichErr_simp = zeros(1,NLim);
+    
+    for N = 1:NLim
+        % Midpoint Rule
+        dx = (b-a)/N;
+        sum_mdp = 0;
+        for p = 1:N
+            X = a + p*(dx)-(dx/2); 
+            Y = f(X);
+            sum_mdp = sum_mdp + Y*dx;      
+        end
+        Int_mdp(N) = sum_mdp;
+        
+        % Trapezoidal Rule
+        dx = (b-a)/(N-1);
+        sum_trpz = 0;
+        for q = 1:N
+            X = a + ((q-1)*dx); 
+            Y = f(X);
+            if (q == 0)||(q == N)
+                coeff = 0.5;
+            else
+                coeff = 1;
+            end
+        sum_trpz = sum_trpz + (coeff*Y*dx);
+        end
+        Int_trpz(N) = sum_trpz;
+        Err_trpz(N) = sum_trpz - integ;
+        EstErr_trpz(N) = (N*dx.^3)/12*f_2(X);
+        RichErr_trpz(N) = -(dx.^2)/12*f_2(X);
+        
+        % Simpson's Rule
+        sum_simp = 0;
+        for r = 1:N
+             X = a + ((r-1)*dx); 
+             Y = f(X);
+             if (mod(r,2) == 0)
+                coeff = 4;
+             else
+                coeff = 2;
+             end
+             if (r == 0)||(r == N)
+                coeff = 1;
+             end
+        sum_simp = sum_simp + (coeff*Y*dx*(1/3));
+        end
+        Int_simp(N) = sum_simp;
+        Err_simp(N) = sum_simp - integ;
+        EstErr_simp(N) = (N*dx^5)/2880*f_4(X);
+        RichErr_simp(N) = -(dx^5)/2880*f_4(X);
+        
+        fprintf(file1, format, [integ, N, sum_mdp, sum_trpz, sum_simp]);
+    end
+    
+    % Real values
+    icf_x = ones(NLim);
+    icf_y = icf_x*integ;
+    figure1 = figure();
+    set(figure1, 'Visible', 'off');
+    %subplot(subplot_h, subplot_w, plot_i);
+    plot(Int_mdp,'-ob');hold on;
+    plot(Int_trpz,'-r','linewidth',2);hold on;
+    plot(Int_simp,'-sm','linewidth',2);hold on;
+    plot(icf_y,'*k');hold on;
+    xlim([0,NLim]);
+    leg = legend('Midpoint','Trapeziodal','Simpson','Real Value');
+    leg.FontSize = 12;
+    title(strcat('Integral convergence with N=', int2str(N)),'fontsize',10);
+    xlabel('Interval N->','fontsize',14);
+    ylabel ('Integral eval ->','fontsize',14);
+    grid on;
+    saveas(figure1, strcat('Outputs/Convergence_Inst_3_N_', int2str(N)), 'png');
+    % Error graph
+    figure2 = figure();
+    set(figure2, 'Visible', 'off');
+    subplot(2,1,1);
+    plot(Err_trpz,'-ob');hold on;
+    plot(EstErr_trpz,'-r','linewidth',2);hold on;
+    plot(RichErr_trpz,'-sm','linewidth',2);hold on;
+    leg = legend('Actual', 'Estimate', 'Richard Estimate');
+    leg.FontSize = 12;
+    title(strcat('Trapezoidal error with N=', int2str(N)),'fontsize',10);
+    % Error graph
+    subplot(2,1,2);
+    plot(Err_simp,'-ob');hold on;
+    plot(EstErr_simp,'-r','linewidth',2);hold on;
+    plot(RichErr_simp,'-sm','linewidth',2);hold on;
+    leg = legend('Actual', 'Estimate', 'Richard Estimate');
+    leg.FontSize = 12;
+    title(strcat('Simpson error with N=', int2str(N)),'fontsize',10);
+    saveas(figure2, strcat('Outputs/Errors_Inst_3_N_', int2str(N)), 'png');
+    
+end
+fclose(file1);
+
+
+
+end
